@@ -186,15 +186,16 @@ fn get_common_parent(paths: &[PathBuf]) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fix::structs::CommandOutput;
     use std::fs;
     use std::io::Write;
     use tempfile::tempdir;
 
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
+
     fn dummy_command() -> Command {
-        let output = super::super::structs::CommandOutput::new(
-            String::new(),
-            String::new(),
-        );
+        let output = CommandOutput::new(String::new(), String::new());
         Command::new("test".to_string(), output)
     }
 
@@ -249,12 +250,54 @@ mod tests {
         assert_eq!(get_module_name(&modules_dir, &rule_path), None);
     }
 
-    fn create_rule_file(dir: &std::path::Path, name: &str, content: &str) -> PathBuf {
+    fn create_rule_file(dir: &Path, name: &str, content: &str) -> PathBuf {
         let path = dir.join(name);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         let mut file = fs::File::create(&path).unwrap();
         write!(file, "{}", content).unwrap();
+
+        #[cfg(unix)]
+        {
+            let mut perms = fs::metadata(&path).unwrap().permissions();
+            perms.set_mode(0o644);
+            fs::set_permissions(&path, perms).unwrap();
+        }
+
         path
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn create_rule_file_sets_correct_permissions() {
+        let temp = tempdir().unwrap();
+        let path = create_rule_file(temp.path(), "perm_check.py", "print('test')");
+        let metadata = fs::metadata(&path).unwrap();
+        let mode = metadata.permissions().mode() & 0o777;
+        assert_eq!(mode, 0o644, "File permissions should be set to 644");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn import_fails_if_file_not_readable() {
+        let temp = tempdir().unwrap();
+        let path = temp.path().join("no_read.py");
+        {
+            let mut file = fs::File::create(&path).unwrap();
+            writeln!(file, "def match(c,o,e): return True").unwrap();
+            writeln!(file, "def fix(c,o,e): return 'fixed'").unwrap();
+        }
+        let mut perms = fs::metadata(&path).unwrap().permissions();
+        perms.set_mode(0o200);
+        fs::set_permissions(&path, perms).unwrap();
+
+        if fs::File::open(&path).is_ok() {
+            return;
+        }
+
+        let cmd = dummy_command();
+        let result = process_python_rules(&cmd, vec![path]);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
     }
 
     #[test]
@@ -385,10 +428,7 @@ def fix(c, o, e): return "cmd3"
 
     #[test]
     fn process_no_common_parent() {
-        let paths = vec![
-            PathBuf::from("a/b.py"),
-            PathBuf::from("c/d.py"),
-        ];
+        let paths = vec![PathBuf::from("a/b.py"), PathBuf::from("c/d.py")];
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, paths);
         assert!(result.is_err());
