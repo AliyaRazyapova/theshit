@@ -21,7 +21,7 @@ fn check_security(path: &Path) -> Result<(), String> {
         ));
     }
 
-    if metadata.permissions().mode() & 0o022 == 0 {
+    if metadata.permissions().mode() & 0o022 != 0 {
         return Err(format!(
             "{} Python rule '{}' is writable by non-owners. Aborting to prevent privilege escalation.",
             "SECURITY ERROR:".red().bold(),
@@ -292,8 +292,7 @@ mod tests {
         #[cfg(unix)]
         {
             let mut perms = fs::metadata(&path).unwrap().permissions();
-            // Временно устанавливаем права 666, чтобы обойти баг в check_security
-            perms.set_mode(0o666);
+            perms.set_mode(0o600);
             fs::set_permissions(&path, perms).unwrap();
         }
 
@@ -307,7 +306,7 @@ mod tests {
         let path = create_rule_file(temp.path(), "perm_check.py", "print('test')");
         let metadata = fs::metadata(&path).unwrap();
         let mode = metadata.permissions().mode() & 0o777;
-        assert_eq!(mode, 0o666, "File permissions should be set to 666");
+        assert_eq!(mode, 0o600, "File permissions should be set to 600");
     }
 
     #[cfg(unix)]
