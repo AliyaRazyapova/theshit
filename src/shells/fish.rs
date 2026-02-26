@@ -106,7 +106,10 @@ mod tests {
     #[test]
     fn test_parse_alias_with_spaces_in_value() {
         let aliases = parse_alias("alias myalias 'command with spaces'".to_string());
-        assert_eq!(aliases.get("myalias"), Some(&"command with spaces".to_string()));
+        assert_eq!(
+            aliases.get("myalias"),
+            Some(&"command with spaces".to_string())
+        );
     }
 
     #[test]
@@ -118,7 +121,9 @@ mod tests {
 
     #[test]
     fn test_parse_alias_mixed_aliases() {
-        let aliases = parse_alias("alias ll 'ls -l'\nalias grep 'grep --color=auto'\nalias cls 'clear'".to_string());
+        let aliases = parse_alias(
+            "alias ll 'ls -l'\nalias grep 'grep --color=auto'\nalias cls 'clear'".to_string(),
+        );
         assert_eq!(aliases.get("ll"), Some(&"ls -l".to_string()));
         assert_eq!(aliases.get("grep"), Some(&"grep --color=auto".to_string()));
         assert_eq!(aliases.get("cls"), Some(&"clear".to_string()));

@@ -456,7 +456,10 @@ def fix(c, o, e): return "cmd3"
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, vec![rule1, rule2, rule3]);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), vec!["cmd1".to_string(), "cmd3".to_string()]);
+        assert_eq!(
+            result.unwrap(),
+            vec!["cmd1".to_string(), "cmd3".to_string()]
+        );
     }
 
     #[test]

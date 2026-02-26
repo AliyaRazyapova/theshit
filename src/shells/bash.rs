@@ -134,6 +134,9 @@ mod tests {
     #[test]
     fn test_parse_alias_with_spaces_in_value() {
         let aliases = parse_alias("alias myalias='command with spaces'".to_string());
-        assert_eq!(aliases.get("myalias"), Some(&"command with spaces".to_string()));
+        assert_eq!(
+            aliases.get("myalias"),
+            Some(&"command with spaces".to_string())
+        );
     }
 }
