@@ -35,10 +35,12 @@ pub fn setup_alias(name: &str, program_path: &Path) -> std::io::Result<()> {
 }
 
 pub fn get_aliases() -> HashMap<String, String> {
-    let raw_aliases = env::var("SH_SHELL_ALIASES").unwrap_or(String::from(""));
-    let split_raw_aliases = raw_aliases.split('\n');
+    parse_alias(generic::get_raw_aliases_from_env())
+}
+
+fn parse_alias(raw_aliases: String) -> HashMap<String, String> {
     let mut aliases: HashMap<String, String> = HashMap::new();
-    for raw_alias in split_raw_aliases {
+    for raw_alias in raw_aliases.split('\n') {
         if !raw_alias.contains('=') || raw_alias.is_empty() {
             continue;
         }

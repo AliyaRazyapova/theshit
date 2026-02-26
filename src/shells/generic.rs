@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{ErrorKind, Read, Result, Write, stdin};
 use std::path::Path;
@@ -35,4 +37,8 @@ pub fn setup_alias(setup_command: String, config_path: &Path) -> Result<()> {
     }
 
     writeln!(config_file, "{setup_command}")
+}
+
+pub fn get_raw_aliases_from_env() -> String {
+    env::var("SH_SHELL_ALIASES").unwrap_or(String::from(""))
 }
