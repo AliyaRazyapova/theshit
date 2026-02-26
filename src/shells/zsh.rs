@@ -38,10 +38,12 @@ pub fn setup_alias(name: &str, program_path: &Path) -> Result<()> {
 }
 
 pub fn get_aliases() -> HashMap<String, String> {
-    let raw_aliases = env::var("SH_SHELL_ALIASES").unwrap_or(String::from(""));
-    let split_raw_aliases = raw_aliases.split('\n');
+    parse_alias(generic::get_raw_aliases_from_env())
+}
+
+fn parse_alias(raw_aliases: String) -> HashMap<String, String> {
     let mut aliases: HashMap<String, String> = HashMap::new();
-    for raw_alias in split_raw_aliases {
+    for raw_alias in raw_aliases.split('\n') {
         if !raw_alias.contains('=') || raw_alias.is_empty() {
             continue;
         }
@@ -85,32 +87,53 @@ mod tests {
     }
 
     #[test]
-    fn test_get_aliases_empty() {
-        let aliases = get_aliases();
+    fn test_parse_alias_empty() {
+        let aliases = parse_alias("".to_string());
         assert!(aliases.is_empty());
     }
 
     #[test]
-    fn test_get_aliases_with_double_quotes() {
-        unsafe {
-            env::set_var("SH_SHELL_ALIASES", "grep=\"grep --color=auto\"");
-        }
-        let aliases = get_aliases();
-        assert_eq!(aliases.get("grep"), Some(&"grep --color=auto".to_string()));
-        unsafe {
-            env::remove_var("SH_SHELL_ALIASES");
-        }
+    fn test_parse_alias_single_alias() {
+        let aliases = parse_alias("ll='ls -l'".to_string());
+        assert_eq!(aliases.get("ll"), Some(&"ls -l".to_string()));
     }
 
     #[test]
-    fn test_get_aliases_with_single_quotes() {
-        unsafe {
-            env::set_var("SH_SHELL_ALIASES", "cls='clear'");
-        }
-        let aliases = get_aliases();
+    fn test_parse_alias_multiple_aliases() {
+        let aliases = parse_alias("ll='ls -l'\nla='ls -la'".to_string());
+        assert_eq!(aliases.get("ll"), Some(&"ls -l".to_string()));
+        assert_eq!(aliases.get("la"), Some(&"ls -la".to_string()));
+    }
+
+    #[test]
+    fn test_parse_alias_with_double_quotes() {
+        let aliases = parse_alias("grep=\"grep --color=auto\"".to_string());
+        assert_eq!(aliases.get("grep"), Some(&"grep --color=auto".to_string()));
+    }
+
+    #[test]
+    fn test_parse_alias_with_single_quotes() {
+        let aliases = parse_alias("cls='clear'".to_string());
         assert_eq!(aliases.get("cls"), Some(&"clear".to_string()));
-        unsafe {
-            env::remove_var("SH_SHELL_ALIASES");
-        }
+    }
+
+    #[test]
+    fn test_parse_alias_mixed_quotes() {
+        let aliases = parse_alias("ll='ls -l'\ngrep=\"grep --color=auto\"".to_string());
+        assert_eq!(aliases.get("ll"), Some(&"ls -l".to_string()));
+        assert_eq!(aliases.get("grep"), Some(&"grep --color=auto".to_string()));
+    }
+
+    #[test]
+    fn test_parse_alias_ignores_invalid_format() {
+        let aliases = parse_alias("not_an_alias\ngrep='grep --color=auto'".to_string());
+        assert_eq!(aliases.get("grep"), Some(&"grep --color=auto".to_string()));
+        assert_eq!(aliases.get("not_an_alias"), None);
+    }
+
+    #[test]
+    fn test_parse_alias_with_spaces_in_value() {
+        let aliases = parse_alias("myalias='command with spaces'".to_string());
+        assert_eq!(aliases.get("myalias"), Some(&"command with spaces".to_string()));
     }
 }
