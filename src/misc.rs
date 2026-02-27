@@ -40,7 +40,7 @@ fn copy_dir_recursive(src: &Dir, dst: &Path) -> IoResult<()> {
         let dst_path = dst.join(
             entry.path()
                 .strip_prefix(src.path())
-                .map_err(|e| std::io::Error::new(ErrorKind::Other, format!("Failed to strip prefix: {}", e)))?
+                .map_err(|e| std::io::Error::other(format!("Failed to strip prefix: {}", e)))?
         );
         match entry {
             DirEntry::Dir(dir) => copy_dir_recursive(dir, &dst_path)?,

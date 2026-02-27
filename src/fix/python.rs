@@ -9,7 +9,7 @@ use crate::error::{AppError, AppResult};
 
 fn check_security(path: &Path) -> AppResult<()> {
     let metadata = fs::metadata(path)
-        .map_err(|e| AppError::Io(e))?;
+    .map_err(AppError::Io)?;
 
     let file_uid = metadata.uid();
     let current_uid = unsafe { libc::geteuid() };
