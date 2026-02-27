@@ -13,12 +13,13 @@ pub fn is_match(command: &Command) -> bool {
 
 pub fn fix(command: &Command) -> String {
     let broken = &command.parts()[1];
-    let fix = Regex::new(r"a command with a similar name exists: `([^`]*)`")
-        .unwrap()
+    let re = Regex::new(r"a command with a similar name exists: `([^`]*)`")
+        .expect("hardcoded regex should be valid");
+    let fix = re
         .captures(command.output().stderr())
         .and_then(|caps| caps.get(1))
         .map(|m| m.as_str())
-        .unwrap();
+        .expect("expected a capture for the similar command");
     misc::replace_argument(command.command(), broken, fix)
 }
 

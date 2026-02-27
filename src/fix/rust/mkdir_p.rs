@@ -16,7 +16,7 @@ pub fn is_match(command: &Command) -> bool {
 
 pub fn fix(command: &Command) -> String {
     Regex::new(r"\bmkdir (.*)")
-        .unwrap()
+        .expect("hardcoded regex should be valid")
         .replace(command.command(), "mkdir -p $1")
         .to_string()
 }

@@ -57,35 +57,35 @@ mod tests {
     fn test_native_rule_from_str_sudo() {
         let rule = NativeRule::from_str("sudo");
         assert!(rule.is_ok());
-        assert!(matches!(rule.unwrap(), NativeRule::Sudo));
+        assert!(matches!(rule.expect("should be Ok"), NativeRule::Sudo));
     }
 
     #[test]
     fn test_native_rule_from_str_to_cd() {
         let rule = NativeRule::from_str("to_cd");
         assert!(rule.is_ok());
-        assert!(matches!(rule.unwrap(), NativeRule::ToCd));
+        assert!(matches!(rule.expect("should be Ok"), NativeRule::ToCd));
     }
 
     #[test]
     fn test_native_rule_from_str_unsudo() {
         let rule = NativeRule::from_str("unsudo");
         assert!(rule.is_ok());
-        assert!(matches!(rule.unwrap(), NativeRule::Unsudo));
+        assert!(matches!(rule.expect("should be Ok"), NativeRule::Unsudo));
     }
 
     #[test]
     fn test_native_rule_from_str_mkdir_p() {
         let rule = NativeRule::from_str("mkdir_p");
         assert!(rule.is_ok());
-        assert!(matches!(rule.unwrap(), NativeRule::MkdirP));
+        assert!(matches!(rule.expect("should be Ok"), NativeRule::MkdirP));
     }
 
     #[test]
     fn test_native_rule_from_str_cargo_no_command() {
         let rule = NativeRule::from_str("cargo_no_command");
         assert!(rule.is_ok());
-        assert!(matches!(rule.unwrap(), NativeRule::CargoNoCommand));
+        assert!(matches!(rule.expect("should be Ok"), NativeRule::CargoNoCommand));
     }
 
     #[test]
@@ -103,7 +103,7 @@ mod tests {
         let rule = NativeRule::Sudo;
         let result = rule.fix_native(&command);
         assert!(result.is_some());
-        assert_eq!(result.unwrap(), "sudo some_command");
+        assert_eq!(result.expect("should be Some"), "sudo some_command");
     }
 
     #[test]
@@ -115,7 +115,7 @@ mod tests {
         let rule = NativeRule::ToCd;
         let result = rule.fix_native(&command);
         assert!(result.is_some());
-        assert_eq!(result.unwrap(), "cd /some/directory");
+        assert_eq!(result.expect("should be Some"), "cd /some/directory");
     }
 
     #[test]
