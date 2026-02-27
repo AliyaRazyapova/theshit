@@ -81,16 +81,16 @@ mod tests {
     #[test]
     fn raw_mode_guard_enables_raw_mode_on_creation() {
         let _guard = RawModeGuard::new();
-        assert!(terminal::is_raw_mode_enabled().unwrap());
+        assert!(terminal::is_raw_mode_enabled().expect("should be able to query raw mode"));
     }
 
     #[test]
     fn raw_mode_guard_disables_raw_mode_on_drop() {
         {
             let _guard = RawModeGuard::new();
-            assert!(terminal::is_raw_mode_enabled().unwrap());
+            assert!(terminal::is_raw_mode_enabled().expect("should be able to query raw mode"));
         }
-        assert!(!terminal::is_raw_mode_enabled().unwrap());
+        assert!(!terminal::is_raw_mode_enabled().expect("should be able to query raw mode"));
     }
 
     #[test]

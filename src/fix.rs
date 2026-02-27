@@ -42,14 +42,22 @@ pub fn fix_command(command: String, expand_command: String) -> io::Result<String
     for rule in fs::read_dir(active_rules_dir)? {
         let rule = rule?;
         let path = rule.path();
-        if path
-            .file_name()
-            .unwrap_or_else(|| panic!("Can't get get file name for {}", path.display()))
-            .to_string_lossy()
-            == "__pycache__"
-        {
+
+        let file_name = match path.file_name() {
+            Some(name) => name,
+            None => {
+                eprintln!(
+                    "{}: {}",
+                    "Skipping rule without filename".yellow(),
+                    path.display()
+                );
+                continue;
+            }
+        };
+        if file_name.to_string_lossy() == "__pycache__" {
             continue;
         }
+
         match path.extension() {
             Some(extension) => match extension.to_string_lossy().as_ref() {
                 "native" => {
@@ -145,32 +153,24 @@ fn get_command_output(expand_command: String) -> io::Result<CommandOutput> {
 
     let child = Command::new(&split_command[0])
         .args(&split_command[1..])
-        .env("LANG", "C") // Set locale to C to avoid issues with rules that depend on locale
+        .env("LANG", "C")
         .env("LC_ALL", "C")
         .spawn()?;
 
-    // Create a channel to communicate between threads
     let (sender, receiver) = mpsc::channel();
 
-    // Spawn a thread to wait for the child process
     let _handle = thread::spawn(move || {
         let result = child.wait_with_output();
         let _ = sender.send(result);
     });
 
-    // Wait for either the command to complete or timeout
     match receiver.recv_timeout(timeout) {
         Ok(Ok(output)) => Ok(CommandOutput::from(output)),
         Ok(Err(e)) => Err(e),
-        Err(mpsc::RecvTimeoutError::Timeout) => {
-            // Command timed out, we need to kill it
-            // Unfortunately, we moved `child` into the thread, so we can't kill it directly
-            // We'll let the thread continue and return a timeout error
-            Err(io::Error::new(
-                ErrorKind::TimedOut,
-                format!("Command timed out after {:?}", timeout),
-            ))
-        }
+        Err(mpsc::RecvTimeoutError::Timeout) => Err(io::Error::new(
+            ErrorKind::TimedOut,
+            format!("Command timed out after {:?}", timeout),
+        )),
         Err(mpsc::RecvTimeoutError::Disconnected) => {
             Err(io::Error::other("Command thread disconnected unexpectedly"))
         }
@@ -187,13 +187,16 @@ fn choose_fixed_command(mut fixed_commands: Vec<String>) -> String {
         std::process::exit(1);
     }
 
-    let mut current_command = fixed_commands.first().unwrap();
+    let mut current_command = fixed_commands
+        .first()
+        .expect("fixed_commands is not empty; checked above");
     let mut current_index = 0;
 
     eprintln!();
     let _raw_mode_guard = RawModeGuard::new();
     let mut err = io::stderr();
-    err.write_all(
+
+    if let Err(e) = err.write_all(
         format!(
             "{} [{}/{}/{}/{}]",
             current_command,
@@ -203,8 +206,10 @@ fn choose_fixed_command(mut fixed_commands: Vec<String>) -> String {
             "Ctrl+C".red()
         )
         .as_bytes(),
-    )
-    .expect("Failed to write to stderr");
+    ) {
+        eprintln!("Warning: failed to write to stderr: {}", e);
+    }
+
     loop {
         match read() {
             Ok(event) => {
@@ -220,8 +225,10 @@ fn choose_fixed_command(mut fixed_commands: Vec<String>) -> String {
                                 } else {
                                     current_index = fixed_commands.len() - 1;
                                 }
-                                current_command = fixed_commands.get(current_index).unwrap();
-                                err.write_all(
+                                current_command = fixed_commands
+                                    .get(current_index)
+                                    .expect("current_index is within bounds");
+                                if let Err(e) = err.write_all(
                                     format!(
                                         "{} [{}/{}/{}/{}]",
                                         current_command,
@@ -231,8 +238,9 @@ fn choose_fixed_command(mut fixed_commands: Vec<String>) -> String {
                                         "Ctrl+C".red()
                                     )
                                     .as_bytes(),
-                                )
-                                .expect("Failed to write to stderr");
+                                ) {
+                                    eprintln!("Warning: failed to write to stderr: {}", e);
+                                }
                             }
                         }
                         (KeyCode::Down, _) => {
@@ -242,8 +250,10 @@ fn choose_fixed_command(mut fixed_commands: Vec<String>) -> String {
                                 } else {
                                     current_index = 0;
                                 }
-                                current_command = fixed_commands.get(current_index).unwrap();
-                                err.write_all(
+                                current_command = fixed_commands
+                                    .get(current_index)
+                                    .expect("current_index is within bounds");
+                                if let Err(e) = err.write_all(
                                     format!(
                                         "{} [{}/{}/{}/{}]",
                                         current_command,
@@ -253,8 +263,9 @@ fn choose_fixed_command(mut fixed_commands: Vec<String>) -> String {
                                         "Ctrl+C".red()
                                     )
                                     .as_bytes(),
-                                )
-                                .expect("Failed to write to stderr");
+                                ) {
+                                    eprintln!("Warning: failed to write to stderr: {}", e);
+                                }
                             }
                         }
                         (KeyCode::Enter, _) => {
@@ -320,7 +331,7 @@ mod tests {
     fn test_get_command_output_empty_command() {
         let result = get_command_output("".to_string());
         assert!(result.is_err());
-        let err = result.err().unwrap();
+        let err = result.err().expect("Expected error but got success");
         assert_eq!(err.kind(), ErrorKind::InvalidInput);
     }
 
@@ -328,8 +339,7 @@ mod tests {
     fn test_get_command_output_nonexistent_command() {
         let result = get_command_output("nonexistent_command_12345".to_string());
         assert!(result.is_err());
-        // Note: The exact error type may vary between systems
-        let err = result.err().unwrap();
+        let err = result.err().expect("Expected error but got success");
         assert!(matches!(err.kind(), ErrorKind::NotFound));
     }
 }

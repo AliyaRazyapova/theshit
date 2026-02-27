@@ -1,53 +1,61 @@
 use super::structs::Command;
+use crate::error::{AppError, AppResult};
 use crossterm::style::Stylize;
+use pyo3::Python;
 use pyo3::types::{PyAnyMethods, PyList, PyListMethods};
-use pyo3::{PyResult, Python};
 use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
-fn check_security(path: &Path) -> Result<(), String> {
-    let metadata = fs::metadata(path).map_err(|e| e.to_string())?;
+fn check_security(path: &Path) -> AppResult<()> {
+    let metadata = fs::metadata(path).map_err(AppError::Io)?;
+
     let file_uid = metadata.uid();
     let current_uid = unsafe { libc::geteuid() };
 
     if current_uid != file_uid {
-        return Err(format!(
-            "{} Running with UID {}, but file '{}' is owned by UID {}. Aborting to prevent privilege escalation.",
+        return Err(AppError::Security(format!(
+            "{} Running with UID {}, but file '{}' is owned by UID {}.",
             "SECURITY ERROR:".red().bold(),
             current_uid,
             path.display(),
             file_uid
-        ));
+        )));
     }
 
     if metadata.permissions().mode() & 0o022 != 0 {
-        return Err(format!(
-            "{} Python rule '{}' is writable by non-owners. Aborting to prevent privilege escalation.",
+        return Err(AppError::Security(format!(
+            "{} Python rule '{}' is writable by non-owners.",
             "SECURITY ERROR:".red().bold(),
             path.display()
-        ));
+        )));
     }
 
     Ok(())
 }
 
-pub fn process_python_rules(
-    command: &Command,
-    rule_paths: Vec<PathBuf>,
-) -> Result<Vec<String>, String> {
+pub fn process_python_rules(command: &Command, rule_paths: Vec<PathBuf>) -> AppResult<Vec<String>> {
     if rule_paths.is_empty() {
         return Ok(vec![]);
     }
     let module_path = get_common_parent(&rule_paths)
-        .ok_or("No common parent found for rule paths".to_string())?;
+        .ok_or_else(|| AppError::Config("No common parent found for rule paths".to_string()))?;
     let mut fixed_commands: Vec<String> = vec![];
     pyo3::prepare_freethreaded_python();
-    Python::with_gil(|py| -> PyResult<()> {
+    Python::with_gil(|py| -> Result<(), AppError> {
         {
-            let raw_sys_path = py.import("sys")?.getattr("path")?;
-            let sys_path = raw_sys_path.downcast::<PyList>()?;
-            sys_path.insert(0, module_path.to_string_lossy())?;
+            let raw_sys_path = py
+                .import("sys")
+                .map_err(|e| AppError::Python(format!("Failed to import sys: {}", e)))?;
+            let sys_path = raw_sys_path
+                .getattr("path")
+                .map_err(|e| AppError::Python(format!("Failed to get sys.path: {}", e)))?;
+            let sys_path = sys_path
+                .downcast::<PyList>()
+                .map_err(|e| AppError::Python(format!("sys.path is not a list: {}", e)))?;
+            sys_path
+                .insert(0, module_path.to_string_lossy())
+                .map_err(|e| AppError::Python(format!("Failed to insert path: {}", e)))?;
         }
 
         for rule_path in rule_paths {
@@ -153,8 +161,7 @@ pub fn process_python_rules(
             }
         }
         Ok(())
-    })
-    .map_err(|err| format!("Failed to process Python rules: {err}"))?;
+    })?;
     Ok(fixed_commands)
 }
 
@@ -285,15 +292,18 @@ mod tests {
 
     fn create_rule_file(dir: &Path, name: &str, content: &str) -> PathBuf {
         let path = dir.join(name);
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let mut file = fs::File::create(&path).unwrap();
-        write!(file, "{}", content).unwrap();
+        fs::create_dir_all(path.parent().expect("Path should have parent"))
+            .expect("Failed to create directories");
+        let mut file = fs::File::create(&path).expect("Failed to create file");
+        write!(file, "{}", content).expect("Failed to write to file");
 
         #[cfg(unix)]
         {
-            let mut perms = fs::metadata(&path).unwrap().permissions();
+            let mut perms = fs::metadata(&path)
+                .expect("Failed to get metadata")
+                .permissions();
             perms.set_mode(0o600);
-            fs::set_permissions(&path, perms).unwrap();
+            fs::set_permissions(&path, perms).expect("Failed to set permissions");
         }
 
         path
@@ -302,9 +312,9 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn create_rule_file_sets_correct_permissions() {
-        let temp = tempdir().unwrap();
+        let temp = tempdir().expect("Failed to create temp dir");
         let path = create_rule_file(temp.path(), "perm_check.py", "print('test')");
-        let metadata = fs::metadata(&path).unwrap();
+        let metadata = fs::metadata(&path).expect("Failed to get metadata");
         let mode = metadata.permissions().mode() & 0o777;
         assert_eq!(mode, 0o600, "File permissions should be set to 600");
     }
@@ -312,16 +322,18 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn import_fails_if_file_not_readable() {
-        let temp = tempdir().unwrap();
+        let temp = tempdir().expect("Failed to create temp dir");
         let path = temp.path().join("no_read.py");
         {
-            let mut file = fs::File::create(&path).unwrap();
-            writeln!(file, "def match(c,o,e): return True").unwrap();
-            writeln!(file, "def fix(c,o,e): return 'fixed'").unwrap();
+            let mut file = fs::File::create(&path).expect("Failed to create file");
+            writeln!(file, "def match(c,o,e): return True").expect("Failed to write");
+            writeln!(file, "def fix(c,o,e): return 'fixed'").expect("Failed to write");
         }
-        let mut perms = fs::metadata(&path).unwrap().permissions();
+        let mut perms = fs::metadata(&path)
+            .expect("Failed to get metadata")
+            .permissions();
         perms.set_mode(0o200);
-        fs::set_permissions(&path, perms).unwrap();
+        fs::set_permissions(&path, perms).expect("Failed to set permissions");
 
         if fs::File::open(&path).is_ok() {
             return;
@@ -330,12 +342,13 @@ mod tests {
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, vec![path]);
         assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
+        let commands = result.expect("Processing should succeed");
+        assert!(commands.is_empty());
     }
 
     #[test]
     fn process_single_rule_match() {
-        let temp = tempdir().unwrap();
+        let temp = tempdir().expect("Failed to create temp dir");
         let rule_path = create_rule_file(
             temp.path(),
             "match_ok.py",
@@ -349,12 +362,13 @@ def fix(command, stdout, stderr):
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, vec![rule_path]);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), vec!["fixed-command".to_string()]);
+        let commands = result.expect("Processing should succeed");
+        assert_eq!(commands, vec!["fixed-command".to_string()]);
     }
 
     #[test]
     fn process_rule_no_match() {
-        let temp = tempdir().unwrap();
+        let temp = tempdir().expect("Failed to create temp dir");
         let rule_path = create_rule_file(
             temp.path(),
             "no_match.py",
@@ -368,12 +382,13 @@ def fix(command, stdout, stderr):
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, vec![rule_path]);
         assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
+        let commands = result.expect("Processing should succeed");
+        assert!(commands.is_empty());
     }
 
     #[test]
     fn process_rule_missing_match_func() {
-        let temp = tempdir().unwrap();
+        let temp = tempdir().expect("Failed to create temp dir");
         let rule_path = create_rule_file(
             temp.path(),
             "missing_match.py",
@@ -385,12 +400,13 @@ def fix(command, stdout, stderr):
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, vec![rule_path]);
         assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
+        let commands = result.expect("Processing should succeed");
+        assert!(commands.is_empty());
     }
 
     #[test]
     fn process_rule_match_raises() {
-        let temp = tempdir().unwrap();
+        let temp = tempdir().expect("Failed to create temp dir");
         let rule_path = create_rule_file(
             temp.path(),
             "match_raises.py",
@@ -404,12 +420,13 @@ def fix(command, stdout, stderr):
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, vec![rule_path]);
         assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
+        let commands = result.expect("Processing should succeed");
+        assert!(commands.is_empty());
     }
 
     #[test]
     fn process_rule_fix_raises() {
-        let temp = tempdir().unwrap();
+        let temp = tempdir().expect("Failed to create temp dir");
         let rule_path = create_rule_file(
             temp.path(),
             "fix_raises.py",
@@ -423,12 +440,13 @@ def fix(command, stdout, stderr):
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, vec![rule_path]);
         assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
+        let commands = result.expect("Processing should succeed");
+        assert!(commands.is_empty());
     }
 
     #[test]
     fn process_multiple_rules() {
-        let temp = tempdir().unwrap();
+        let temp = tempdir().expect("Failed to create temp dir");
         let rule1 = create_rule_file(
             temp.path(),
             "multi1.py",
@@ -456,10 +474,8 @@ def fix(c, o, e): return "cmd3"
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, vec![rule1, rule2, rule3]);
         assert!(result.is_ok());
-        assert_eq!(
-            result.unwrap(),
-            vec!["cmd1".to_string(), "cmd3".to_string()]
-        );
+        let commands = result.expect("Processing should succeed");
+        assert_eq!(commands, vec!["cmd1".to_string(), "cmd3".to_string()]);
     }
 
     #[test]
@@ -468,7 +484,8 @@ def fix(c, o, e): return "cmd3"
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, paths);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("No common parent found"));
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("No common parent found"));
     }
 
     #[test]
@@ -476,6 +493,7 @@ def fix(c, o, e): return "cmd3"
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, vec![]);
         assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
+        let commands = result.expect("Processing should succeed");
+        assert!(commands.is_empty());
     }
 }

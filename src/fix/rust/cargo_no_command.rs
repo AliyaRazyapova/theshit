@@ -1,3 +1,4 @@
+use crate::error::{AppError, AppResult};
 use crate::fix::structs::Command;
 use crate::misc;
 use regex::Regex;
@@ -11,15 +12,16 @@ pub fn is_match(command: &Command) -> bool {
         && command.parts()[0] == "cargo"
 }
 
-pub fn fix(command: &Command) -> String {
+pub fn fix(command: &Command) -> AppResult<String> {
     let broken = &command.parts()[1];
-    let fix = Regex::new(r"a command with a similar name exists: `([^`]*)`")
-        .unwrap()
+    let re = Regex::new(r"a command with a similar name exists: `([^`]*)`")
+        .map_err(|e| AppError::Other(format!("Invalid regex: {}", e)))?;
+    let fix = re
         .captures(command.output().stderr())
         .and_then(|caps| caps.get(1))
         .map(|m| m.as_str())
-        .unwrap();
-    misc::replace_argument(command.command(), broken, fix)
+        .ok_or_else(|| AppError::Other("Expected a capture for the similar command".into()))?;
+    Ok(misc::replace_argument(command.command(), broken, fix))
 }
 
 #[cfg(test)]
@@ -85,6 +87,6 @@ mod tests {
                     .to_string(),
             ),
         );
-        assert_eq!(fix(&command), "cargo new");
+        assert_eq!(fix(&command).unwrap(), "cargo new");
     }
 }

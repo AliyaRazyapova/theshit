@@ -50,21 +50,27 @@ mod tests {
     fn test_shell_from_str_bash() {
         let shell = Shell::from_str("bash");
         assert!(shell.is_ok());
-        assert!(matches!(shell.unwrap(), Shell::Bash));
+        assert!(matches!(
+            shell.expect("Shell should be parsed"),
+            Shell::Bash
+        ));
     }
 
     #[test]
     fn test_shell_from_str_zsh() {
         let shell = Shell::from_str("zsh");
         assert!(shell.is_ok());
-        assert!(matches!(shell.unwrap(), Shell::Zsh));
+        assert!(matches!(shell.expect("Shell should be parsed"), Shell::Zsh));
     }
 
     #[test]
     fn test_shell_from_str_fish() {
         let shell = Shell::from_str("fish");
         assert!(shell.is_ok());
-        assert!(matches!(shell.unwrap(), Shell::Fish));
+        assert!(matches!(
+            shell.expect("Shell should be parsed"),
+            Shell::Fish
+        ));
     }
 
     #[test]

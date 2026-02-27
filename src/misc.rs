@@ -1,3 +1,4 @@
+use crate::error::{AppError, AppResult};
 #[cfg(not(feature = "standard_panic"))]
 use crossterm::style::Stylize;
 use include_dir::{Dir, DirEntry, include_dir};
@@ -5,7 +6,7 @@ use regex::Regex;
 use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::fs;
-use std::io::{ErrorKind, Result};
+use std::io::{self, ErrorKind, Result as IoResult};
 use std::path::{Path, PathBuf};
 
 static ASSETS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets");
@@ -31,12 +32,17 @@ macro_rules! min_of {
     );
 }
 
-fn copy_dir_recursive(src: &Dir, dst: &Path) -> Result<()> {
+fn copy_dir_recursive(src: &Dir, dst: &Path) -> IoResult<()> {
     if !dst.exists() {
         fs::create_dir_all(dst)?;
     }
     for entry in src.entries() {
-        let dst_path = dst.join(entry.path().strip_prefix(src.path()).unwrap());
+        let dst_path = dst.join(
+            entry
+                .path()
+                .strip_prefix(src.path())
+                .map_err(|e| std::io::Error::other(format!("Failed to strip prefix: {}", e)))?,
+        );
         match entry {
             DirEntry::Dir(dir) => copy_dir_recursive(dir, &dst_path)?,
             DirEntry::File(file) => {
@@ -49,27 +55,27 @@ fn copy_dir_recursive(src: &Dir, dst: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn create_default_fix_rules(rules_dir: PathBuf) -> Result<()> {
+pub fn create_default_fix_rules(rules_dir: PathBuf) -> IoResult<()> {
     if rules_dir.as_path().exists() {
         return Err(ErrorKind::AlreadyExists.into());
     }
 
-    copy_dir_recursive(
-        ASSETS_DIR
-            .get_dir("rules")
-            .expect("Active rules didn't find"),
-        &rules_dir,
-    )?;
+    let rules_dir_entry = ASSETS_DIR
+        .get_dir("rules")
+        .ok_or_else(|| io::Error::new(ErrorKind::NotFound, "Built-in rules directory not found"))?;
+    copy_dir_recursive(rules_dir_entry, &rules_dir)?;
     Ok(())
 }
 
-pub fn expand_aliases(command: &str, aliases: HashMap<String, String>) -> String {
-    let binary = command.split(' ').next().expect("Could not find binary");
-
+pub fn expand_aliases(command: &str, aliases: HashMap<String, String>) -> AppResult<String> {
+    let binary = command
+        .split(' ')
+        .next()
+        .ok_or_else(|| AppError::Config("Empty command provided".into()))?;
     if aliases.contains_key(binary) {
-        command.replacen(binary, &aliases[binary], 1)
+        Ok(command.replacen(binary, &aliases[binary], 1))
     } else {
-        command.to_string()
+        Ok(command.to_string())
     }
 }
 
@@ -78,7 +84,7 @@ fn damerau_levenshtein_distance(s1: &str, s2: &str) -> usize {
     let columns = s2.len() + 1;
     let s1 = s1.chars().collect::<Vec<_>>().into_boxed_slice();
     let s2 = s2.chars().collect::<Vec<_>>().into_boxed_slice();
-    let mut matrix = vec![0usize; columns * rows].into_boxed_slice(); // matrix[i,j] = matrix[i*columns+j+1]
+    let mut matrix = vec![0usize; columns * rows].into_boxed_slice();
 
     for i in 0..rows {
         for j in 0..columns {
@@ -120,7 +126,7 @@ pub fn split_command(command: &str) -> Vec<String> {
 
 pub fn replace_argument(script: &str, from: &str, to: &str) -> String {
     let end_pattern = format!(r" {}$", regex::escape(from));
-    let end_regex = Regex::new(&end_pattern).unwrap();
+    let end_regex = Regex::new(&end_pattern).expect("Hardcoded regex pattern should be valid");
 
     if end_regex.is_match(script) {
         return end_regex.replace(script, format!(" {to}")).to_string();
@@ -171,22 +177,22 @@ mod tests {
 
     #[test]
     fn creates_fix_rules() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
         let temp_dir_path = temp_dir.path();
 
-        assert!(
-            create_default_fix_rules(temp_dir_path.to_path_buf().join("theshit/fix_rules")).is_ok()
-        );
+        let result =
+            create_default_fix_rules(temp_dir_path.to_path_buf().join("theshit/fix_rules"));
+        assert!(result.is_ok());
         assert!(temp_dir_path.join("theshit/fix_rules/active").exists());
         assert!(temp_dir_path.join("theshit/fix_rules/additional").exists());
     }
 
     #[test]
     fn returns_error_when_fix_rules_already_exist() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
         let temp_dir_path = temp_dir.path();
         let rules_dir = temp_dir_path.join("theshit/fix_rules");
-        fs::create_dir_all(&rules_dir).unwrap();
+        fs::create_dir_all(&rules_dir).expect("Failed to create directory");
 
         let result = create_default_fix_rules(rules_dir);
         assert!(result.is_err());
@@ -206,7 +212,7 @@ mod tests {
     fn test_expand_simple_alias() {
         let aliases = get_mock_alias();
 
-        let result = expand_aliases("ll", aliases);
+        let result = expand_aliases("ll", aliases).unwrap();
         assert_eq!(result, "ls -l");
     }
 
@@ -214,7 +220,7 @@ mod tests {
     fn test_expand_alias_with_arguments() {
         let aliases = get_mock_alias();
 
-        let result = expand_aliases("ll /home/user", aliases);
+        let result = expand_aliases("ll /home/user", aliases).unwrap();
         assert_eq!(result, "ls -l /home/user");
     }
 
@@ -222,7 +228,7 @@ mod tests {
     fn test_expand_alias_with_multiple_arguments() {
         let aliases = get_mock_alias();
 
-        let result = expand_aliases("grep pattern file.txt", aliases);
+        let result = expand_aliases("grep pattern file.txt", aliases).unwrap();
         assert_eq!(result, "grep --color=auto pattern file.txt");
     }
 
@@ -230,7 +236,7 @@ mod tests {
     fn test_no_alias_found() {
         let aliases = get_mock_alias();
 
-        let result = expand_aliases("vim file.txt", aliases);
+        let result = expand_aliases("vim file.txt", aliases).unwrap();
         assert_eq!(result, "vim file.txt");
     }
 
@@ -238,7 +244,7 @@ mod tests {
     fn test_empty_aliases() {
         let aliases = HashMap::new();
 
-        let result = expand_aliases("ls", aliases);
+        let result = expand_aliases("ls", aliases).unwrap();
         assert_eq!(result, "ls");
     }
 
@@ -247,7 +253,7 @@ mod tests {
         let mut aliases = HashMap::new();
         aliases.insert("test".to_string(), "echo".to_string());
 
-        let result = expand_aliases("test test again", aliases);
+        let result = expand_aliases("test test again", aliases).unwrap();
         assert_eq!(result, "echo test again");
     }
 
@@ -320,8 +326,7 @@ mod tests {
     #[test]
     fn test_single_word_command() {
         let aliases = get_mock_alias();
-
-        let result = expand_aliases("cls", aliases);
+        let result = expand_aliases("cls", aliases).unwrap();
         assert_eq!(result, "clear");
     }
 }
