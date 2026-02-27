@@ -139,10 +139,7 @@ mod tests {
     fn no_shell_found_when_parent_pid_is_zero() {
         let tree = MockProcessTree {
             parents: HashMap::from([(100, 0)]),
-            names: HashMap::from([
-                (100, "cargo".to_string()),
-                (0, "init".to_string()),
-            ]),
+            names: HashMap::from([(100, "cargo".to_string()), (0, "init".to_string())]),
         };
 
         let shell = find_shell_in_process_tree(&tree, 100);
@@ -196,10 +193,7 @@ mod tests {
     fn find_fish_shell_in_process_tree() {
         let tree = MockProcessTree {
             parents: HashMap::from([(200, 100)]),
-            names: HashMap::from([
-                (100, "fish".to_string()),
-                (200, "cargo".to_string()),
-            ]),
+            names: HashMap::from([(100, "fish".to_string()), (200, "cargo".to_string())]),
         };
 
         let shell = find_shell_in_process_tree(&tree, 200);
@@ -210,10 +204,7 @@ mod tests {
     fn find_zsh_shell_in_process_tree() {
         let tree = MockProcessTree {
             parents: HashMap::from([(200, 100)]),
-            names: HashMap::from([
-                (100, "zsh".to_string()),
-                (200, "cargo".to_string()),
-            ]),
+            names: HashMap::from([(100, "zsh".to_string()), (200, "cargo".to_string())]),
         };
 
         let shell = find_shell_in_process_tree(&tree, 200);
