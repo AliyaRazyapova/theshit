@@ -5,6 +5,7 @@ mod cli;
 mod fix;
 mod misc;
 mod shells;
+mod error;
 
 use clap::Parser;
 use cli::{Cli, Command};

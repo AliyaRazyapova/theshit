@@ -3,7 +3,6 @@ name = "theshit"
 version = "0.1.1"
 edition = "2024"
 license = "MIT"
-license-file = "LICENSE"
 authors = ["David Lishchyshen <microdaika1@gmail.com>"]
 description = "A command-line utility that automatically detects and fixes common mistakes in shell commands with a focus on speed and usability."
 readme = "README.md"
@@ -35,6 +34,8 @@ strum = { version = "0.27.1", features = ["derive"] }
 sysinfo = "0.35.2"
 regex = "1.11.1"
 libc = "0.2.178"
+thiserror = "1.0"
+anyhow = "1.0"
 
 [dev-dependencies]
 tempfile = "3.20.0"
