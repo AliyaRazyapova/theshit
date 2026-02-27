@@ -132,7 +132,7 @@ mod tests {
         };
 
         let shell = find_shell_in_process_tree(&tree, 100);
-        assert!(matches!(shell, None));
+        assert!(shell.is_none());
     }
 
     #[test]
@@ -143,7 +143,7 @@ mod tests {
         };
 
         let shell = find_shell_in_process_tree(&tree, 100);
-        assert!(matches!(shell, None));
+        assert!(shell.is_none());
     }
 
     #[test]
@@ -171,7 +171,7 @@ mod tests {
         };
 
         let shell = find_shell_in_process_tree(&tree, 300);
-        assert!(matches!(shell, None));
+        assert!(shell.is_none());
     }
 
     #[test]
@@ -186,7 +186,7 @@ mod tests {
         };
 
         let shell = find_shell_in_process_tree(&tree, 300);
-        assert!(matches!(shell, None));
+        assert!(shell.is_none());
     }
 
     #[test]

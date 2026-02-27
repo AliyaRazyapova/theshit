@@ -105,7 +105,7 @@ pub fn fix_command(command: String, expand_command: String) -> io::Result<String
 
 fn get_command_timeout(command_name: &str) -> Duration {
     // Get the base command name without path
-    let base_command = command_name.split('/').last().unwrap_or(command_name);
+    let base_command = command_name.split('/').next_back().unwrap_or(command_name);
 
     match base_command {
         // Slow commands that may take longer
@@ -171,10 +171,9 @@ fn get_command_output(expand_command: String) -> io::Result<CommandOutput> {
                 format!("Command timed out after {:?}", timeout),
             ))
         }
-        Err(mpsc::RecvTimeoutError::Disconnected) => Err(io::Error::new(
-            ErrorKind::Other,
-            "Command thread disconnected unexpectedly",
-        )),
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            Err(io::Error::other("Command thread disconnected unexpectedly"))
+        }
     }
 }
 

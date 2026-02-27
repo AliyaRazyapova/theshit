@@ -1,7 +1,6 @@
 use crate::misc;
 use crate::shells::generic;
 use std::collections::HashMap;
-use std::env;
 use std::io::ErrorKind;
 use std::path::Path;
 

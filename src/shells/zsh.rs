@@ -1,6 +1,5 @@
 use crate::shells::generic;
 use std::collections::HashMap;
-use std::env;
 use std::io::{ErrorKind, Result};
 use std::path::Path;
 
