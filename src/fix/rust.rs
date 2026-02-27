@@ -24,23 +24,36 @@ pub enum NativeRule {
 impl NativeRule {
     pub fn fix_native(self, command: &Command) -> Option<String> {
         match self {
-            NativeRule::Sudo => Self::match_and_fix(sudo::is_match, sudo::fix, command),
-            NativeRule::ToCd => Self::match_and_fix(to_cd::is_match, to_cd::fix, command),
-            NativeRule::Unsudo => Self::match_and_fix(unsudo::is_match, unsudo::fix, command),
-            NativeRule::MkdirP => Self::match_and_fix(mkdir_p::is_match, mkdir_p::fix, command),
-            NativeRule::CargoNoCommand => {
-                Self::match_and_fix(cargo_no_command::is_match, cargo_no_command::fix, command)
-            }
+            NativeRule::Sudo => Self::match_and_fix(sudo::is_match, || Some(sudo::fix(command)), command),
+            NativeRule::ToCd => Self::match_and_fix(to_cd::is_match, || Some(to_cd::fix(command)), command),
+            NativeRule::Unsudo => Self::match_and_fix(unsudo::is_match, || Some(unsudo::fix(command)), command),
+            NativeRule::MkdirP => Self::match_and_fix(mkdir_p::is_match, || {
+                match mkdir_p::fix(command) {
+                    Ok(s) => Some(s),
+                    Err(e) => {
+                        eprintln!("Error in mkdir_p fix: {}", e);
+                        None
+                    }
+                }
+            }, command),
+            NativeRule::CargoNoCommand => Self::match_and_fix(cargo_no_command::is_match, || {
+                match cargo_no_command::fix(command) {
+                    Ok(s) => Some(s),
+                    Err(e) => {
+                        eprintln!("Error in cargo_no_command fix: {}", e);
+                        None
+                    }
+                }
+            }, command),
         }
     }
 
-    fn match_and_fix(
-        match_function: fn(&Command) -> bool,
-        fix_function: fn(&Command) -> String,
-        command: &Command,
-    ) -> Option<String> {
+    fn match_and_fix<F>(match_function: fn(&Command) -> bool, fix_function: F, command: &Command) -> Option<String>
+    where
+        F: FnOnce() -> Option<String>,
+    {
         if match_function(command) {
-            Some(fix_function(command))
+            fix_function()
         } else {
             None
         }

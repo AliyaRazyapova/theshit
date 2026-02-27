@@ -5,8 +5,9 @@ use regex::Regex;
 use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::fs;
-use std::io::{ErrorKind, Result};
+use std::io::{self, ErrorKind, Result as IoResult};
 use std::path::{Path, PathBuf};
+use crate::error::{AppError, AppResult};
 
 static ASSETS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets");
 
@@ -31,7 +32,7 @@ macro_rules! min_of {
     );
 }
 
-fn copy_dir_recursive(src: &Dir, dst: &Path) -> Result<()> {
+fn copy_dir_recursive(src: &Dir, dst: &Path) -> IoResult<()> {
     if !dst.exists() {
         fs::create_dir_all(dst)?;
     }
@@ -39,7 +40,7 @@ fn copy_dir_recursive(src: &Dir, dst: &Path) -> Result<()> {
         let dst_path = dst.join(
             entry.path()
                 .strip_prefix(src.path())
-                .expect("Entry path should be inside src directory")
+                .map_err(|e| std::io::Error::new(ErrorKind::Other, format!("Failed to strip prefix: {}", e)))?
         );
         match entry {
             DirEntry::Dir(dir) => copy_dir_recursive(dir, &dst_path)?,
@@ -53,27 +54,25 @@ fn copy_dir_recursive(src: &Dir, dst: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn create_default_fix_rules(rules_dir: PathBuf) -> Result<()> {
+pub fn create_default_fix_rules(rules_dir: PathBuf) -> IoResult<()> {
     if rules_dir.as_path().exists() {
         return Err(ErrorKind::AlreadyExists.into());
     }
 
-    copy_dir_recursive(
-        ASSETS_DIR
-            .get_dir("rules")
-            .expect("Active rules didn't find"),
-        &rules_dir,
-    )?;
+    let rules_dir_entry = ASSETS_DIR.get_dir("rules").ok_or_else(|| {
+        io::Error::new(ErrorKind::NotFound, "Built-in rules directory not found")
+    })?;
+    copy_dir_recursive(rules_dir_entry, &rules_dir)?;
     Ok(())
 }
 
-pub fn expand_aliases(command: &str, aliases: HashMap<String, String>) -> String {
-    let binary = command.split(' ').next().expect("Could not find binary");
-
+pub fn expand_aliases(command: &str, aliases: HashMap<String, String>) -> AppResult<String> {
+    let binary = command.split(' ').next()
+        .ok_or_else(|| AppError::Config("Empty command provided".into()))?;
     if aliases.contains_key(binary) {
-        command.replacen(binary, &aliases[binary], 1)
+        Ok(command.replacen(binary, &aliases[binary], 1))
     } else {
-        command.to_string()
+        Ok(command.to_string())
     }
 }
 
@@ -210,7 +209,7 @@ mod tests {
     fn test_expand_simple_alias() {
         let aliases = get_mock_alias();
 
-        let result = expand_aliases("ll", aliases);
+        let result = expand_aliases("ll", aliases).unwrap();
         assert_eq!(result, "ls -l");
     }
 
@@ -218,7 +217,7 @@ mod tests {
     fn test_expand_alias_with_arguments() {
         let aliases = get_mock_alias();
 
-        let result = expand_aliases("ll /home/user", aliases);
+        let result = expand_aliases("ll /home/user", aliases).unwrap();
         assert_eq!(result, "ls -l /home/user");
     }
 
@@ -226,7 +225,7 @@ mod tests {
     fn test_expand_alias_with_multiple_arguments() {
         let aliases = get_mock_alias();
 
-        let result = expand_aliases("grep pattern file.txt", aliases);
+        let result = expand_aliases("grep pattern file.txt", aliases).unwrap();
         assert_eq!(result, "grep --color=auto pattern file.txt");
     }
 
@@ -234,7 +233,7 @@ mod tests {
     fn test_no_alias_found() {
         let aliases = get_mock_alias();
 
-        let result = expand_aliases("vim file.txt", aliases);
+        let result = expand_aliases("vim file.txt", aliases).unwrap();
         assert_eq!(result, "vim file.txt");
     }
 
@@ -242,7 +241,7 @@ mod tests {
     fn test_empty_aliases() {
         let aliases = HashMap::new();
 
-        let result = expand_aliases("ls", aliases);
+        let result = expand_aliases("ls", aliases).unwrap();
         assert_eq!(result, "ls");
     }
 
@@ -251,7 +250,7 @@ mod tests {
         let mut aliases = HashMap::new();
         aliases.insert("test".to_string(), "echo".to_string());
 
-        let result = expand_aliases("test test again", aliases);
+        let result = expand_aliases("test test again", aliases).unwrap();
         assert_eq!(result, "echo test again");
     }
 
@@ -324,8 +323,7 @@ mod tests {
     #[test]
     fn test_single_word_command() {
         let aliases = get_mock_alias();
-
-        let result = expand_aliases("cls", aliases);
+        let result = expand_aliases("cls", aliases).unwrap();
         assert_eq!(result, "clear");
     }
 }

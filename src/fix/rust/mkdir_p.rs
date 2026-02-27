@@ -1,5 +1,6 @@
 use crate::fix::structs::Command;
 use regex::Regex;
+use crate::error::{AppError, AppResult};
 
 pub fn is_match(command: &Command) -> bool {
     command.parts().contains(&"mkdir".to_string())
@@ -14,11 +15,10 @@ pub fn is_match(command: &Command) -> bool {
                 .contains("No such file or directory"))
 }
 
-pub fn fix(command: &Command) -> String {
-    Regex::new(r"\bmkdir (.*)")
-        .expect("hardcoded regex should be valid")
-        .replace(command.command(), "mkdir -p $1")
-        .to_string()
+pub fn fix(command: &Command) -> AppResult<String> {
+    let re = Regex::new(r"\bmkdir (.*)")
+        .map_err(|e| AppError::Other(format!("Invalid regex: {}", e)))?;
+    Ok(re.replace(command.command(), "mkdir -p $1").to_string())
 }
 
 #[cfg(test)]
@@ -68,6 +68,6 @@ mod tests {
             "mkdir some_directory".to_string(),
             CommandOutput::new(String::new(), "No such file or directory".to_string()),
         );
-        assert_eq!(fix(&command), "mkdir -p some_directory");
+        assert_eq!(fix(&command).unwrap(), "mkdir -p some_directory");
     }
 }

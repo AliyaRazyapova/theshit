@@ -13,6 +13,9 @@ pub enum AppError {
 
     #[error("Configuration error: {0}")]
     Config(String),
+
+    #[error("Other error: {0}")]
+    Other(String),
 }
 
 pub type AppResult<T> = Result<T, AppError>;

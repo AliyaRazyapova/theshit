@@ -13,18 +13,14 @@ pub fn setup_alias(setup_command: String, config_path: &Path) -> Result<()> {
                     config_path.display()
                 );
                 let mut input = String::new();
-                stdin()
-                    .read_line(&mut input)
-                    .expect("Error getting user input");
+                stdin().read_line(&mut input)?;
                 if input.trim().eq_ignore_ascii_case("y") || input.trim().is_empty() {
-                    File::create(config_path).expect("Failed to create config file")
+                    File::create(config_path)?
                 } else {
                     return Err(ErrorKind::NotFound.into());
                 }
             }
-            _ => {
-                return Err(error);
-            }
+            _ => return Err(error),
         },
     };
 
