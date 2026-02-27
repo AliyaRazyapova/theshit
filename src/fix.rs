@@ -46,7 +46,11 @@ pub fn fix_command(command: String, expand_command: String) -> io::Result<String
         let file_name = match path.file_name() {
             Some(name) => name,
             None => {
-                eprintln!("{}: {}", "Skipping rule without filename".yellow(), path.display());
+                eprintln!(
+                    "{}: {}",
+                    "Skipping rule without filename".yellow(),
+                    path.display()
+                );
                 continue;
             }
         };
@@ -183,7 +187,8 @@ fn choose_fixed_command(mut fixed_commands: Vec<String>) -> String {
         std::process::exit(1);
     }
 
-    let mut current_command = fixed_commands.first()
+    let mut current_command = fixed_commands
+        .first()
         .expect("fixed_commands is not empty; checked above");
     let mut current_index = 0;
 
@@ -220,7 +225,8 @@ fn choose_fixed_command(mut fixed_commands: Vec<String>) -> String {
                                 } else {
                                     current_index = fixed_commands.len() - 1;
                                 }
-                                current_command = fixed_commands.get(current_index)
+                                current_command = fixed_commands
+                                    .get(current_index)
                                     .expect("current_index is within bounds");
                                 if let Err(e) = err.write_all(
                                     format!(
@@ -244,7 +250,8 @@ fn choose_fixed_command(mut fixed_commands: Vec<String>) -> String {
                                 } else {
                                     current_index = 0;
                                 }
-                                current_command = fixed_commands.get(current_index)
+                                current_command = fixed_commands
+                                    .get(current_index)
                                     .expect("current_index is within bounds");
                                 if let Err(e) = err.write_all(
                                     format!(

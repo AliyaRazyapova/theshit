@@ -1,15 +1,14 @@
 use super::structs::Command;
+use crate::error::{AppError, AppResult};
 use crossterm::style::Stylize;
+use pyo3::Python;
 use pyo3::types::{PyAnyMethods, PyList, PyListMethods};
-use pyo3::{Python};
 use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
-use crate::error::{AppError, AppResult};
 
 fn check_security(path: &Path) -> AppResult<()> {
-    let metadata = fs::metadata(path)
-    .map_err(AppError::Io)?;
+    let metadata = fs::metadata(path).map_err(AppError::Io)?;
 
     let file_uid = metadata.uid();
     let current_uid = unsafe { libc::geteuid() };
@@ -35,10 +34,7 @@ fn check_security(path: &Path) -> AppResult<()> {
     Ok(())
 }
 
-pub fn process_python_rules(
-    command: &Command,
-    rule_paths: Vec<PathBuf>,
-) -> AppResult<Vec<String>> {
+pub fn process_python_rules(command: &Command, rule_paths: Vec<PathBuf>) -> AppResult<Vec<String>> {
     if rule_paths.is_empty() {
         return Ok(vec![]);
     }
@@ -48,13 +44,17 @@ pub fn process_python_rules(
     pyo3::prepare_freethreaded_python();
     Python::with_gil(|py| -> Result<(), AppError> {
         {
-            let raw_sys_path = py.import("sys")
+            let raw_sys_path = py
+                .import("sys")
                 .map_err(|e| AppError::Python(format!("Failed to import sys: {}", e)))?;
-            let sys_path = raw_sys_path.getattr("path")
+            let sys_path = raw_sys_path
+                .getattr("path")
                 .map_err(|e| AppError::Python(format!("Failed to get sys.path: {}", e)))?;
-            let sys_path = sys_path.downcast::<PyList>()
+            let sys_path = sys_path
+                .downcast::<PyList>()
                 .map_err(|e| AppError::Python(format!("sys.path is not a list: {}", e)))?;
-            sys_path.insert(0, module_path.to_string_lossy())
+            sys_path
+                .insert(0, module_path.to_string_lossy())
                 .map_err(|e| AppError::Python(format!("Failed to insert path: {}", e)))?;
         }
 
@@ -475,10 +475,7 @@ def fix(c, o, e): return "cmd3"
         let result = process_python_rules(&cmd, vec![rule1, rule2, rule3]);
         assert!(result.is_ok());
         let commands = result.expect("Processing should succeed");
-        assert_eq!(
-            commands,
-            vec!["cmd1".to_string(), "cmd3".to_string()]
-        );
+        assert_eq!(commands, vec!["cmd1".to_string(), "cmd3".to_string()]);
     }
 
     #[test]

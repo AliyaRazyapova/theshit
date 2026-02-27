@@ -1,3 +1,4 @@
+use crate::error::{AppError, AppResult};
 #[cfg(not(feature = "standard_panic"))]
 use crossterm::style::Stylize;
 use include_dir::{Dir, DirEntry, include_dir};
@@ -7,7 +8,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{self, ErrorKind, Result as IoResult};
 use std::path::{Path, PathBuf};
-use crate::error::{AppError, AppResult};
 
 static ASSETS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets");
 
@@ -38,9 +38,10 @@ fn copy_dir_recursive(src: &Dir, dst: &Path) -> IoResult<()> {
     }
     for entry in src.entries() {
         let dst_path = dst.join(
-            entry.path()
+            entry
+                .path()
                 .strip_prefix(src.path())
-                .map_err(|e| std::io::Error::other(format!("Failed to strip prefix: {}", e)))?
+                .map_err(|e| std::io::Error::other(format!("Failed to strip prefix: {}", e)))?,
         );
         match entry {
             DirEntry::Dir(dir) => copy_dir_recursive(dir, &dst_path)?,
@@ -59,15 +60,17 @@ pub fn create_default_fix_rules(rules_dir: PathBuf) -> IoResult<()> {
         return Err(ErrorKind::AlreadyExists.into());
     }
 
-    let rules_dir_entry = ASSETS_DIR.get_dir("rules").ok_or_else(|| {
-        io::Error::new(ErrorKind::NotFound, "Built-in rules directory not found")
-    })?;
+    let rules_dir_entry = ASSETS_DIR
+        .get_dir("rules")
+        .ok_or_else(|| io::Error::new(ErrorKind::NotFound, "Built-in rules directory not found"))?;
     copy_dir_recursive(rules_dir_entry, &rules_dir)?;
     Ok(())
 }
 
 pub fn expand_aliases(command: &str, aliases: HashMap<String, String>) -> AppResult<String> {
-    let binary = command.split(' ').next()
+    let binary = command
+        .split(' ')
+        .next()
         .ok_or_else(|| AppError::Config("Empty command provided".into()))?;
     if aliases.contains_key(binary) {
         Ok(command.replacen(binary, &aliases[binary], 1))
@@ -123,8 +126,7 @@ pub fn split_command(command: &str) -> Vec<String> {
 
 pub fn replace_argument(script: &str, from: &str, to: &str) -> String {
     let end_pattern = format!(r" {}$", regex::escape(from));
-    let end_regex = Regex::new(&end_pattern)
-        .expect("Hardcoded regex pattern should be valid");
+    let end_regex = Regex::new(&end_pattern).expect("Hardcoded regex pattern should be valid");
 
     if end_regex.is_match(script) {
         return end_regex.replace(script, format!(" {to}")).to_string();
@@ -178,7 +180,8 @@ mod tests {
         let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
         let temp_dir_path = temp_dir.path();
 
-        let result = create_default_fix_rules(temp_dir_path.to_path_buf().join("theshit/fix_rules"));
+        let result =
+            create_default_fix_rules(temp_dir_path.to_path_buf().join("theshit/fix_rules"));
         assert!(result.is_ok());
         assert!(temp_dir_path.join("theshit/fix_rules/active").exists());
         assert!(temp_dir_path.join("theshit/fix_rules/additional").exists());

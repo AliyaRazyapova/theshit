@@ -1,6 +1,6 @@
+use crate::error::{AppError, AppResult};
 use crate::fix::structs::Command;
 use regex::Regex;
-use crate::error::{AppError, AppResult};
 
 pub fn is_match(command: &Command) -> bool {
     command.parts().contains(&"mkdir".to_string())

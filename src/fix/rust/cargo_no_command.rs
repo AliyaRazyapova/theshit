@@ -1,7 +1,7 @@
+use crate::error::{AppError, AppResult};
 use crate::fix::structs::Command;
 use crate::misc;
 use regex::Regex;
-use crate::error::{AppError, AppResult};
 
 pub fn is_match(command: &Command) -> bool {
     command.output().stderr().contains("no such command")

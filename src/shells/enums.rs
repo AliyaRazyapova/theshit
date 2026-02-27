@@ -50,7 +50,10 @@ mod tests {
     fn test_shell_from_str_bash() {
         let shell = Shell::from_str("bash");
         assert!(shell.is_ok());
-        assert!(matches!(shell.expect("Shell should be parsed"), Shell::Bash));
+        assert!(matches!(
+            shell.expect("Shell should be parsed"),
+            Shell::Bash
+        ));
     }
 
     #[test]
@@ -64,7 +67,10 @@ mod tests {
     fn test_shell_from_str_fish() {
         let shell = Shell::from_str("fish");
         assert!(shell.is_ok());
-        assert!(matches!(shell.expect("Shell should be parsed"), Shell::Fish));
+        assert!(matches!(
+            shell.expect("Shell should be parsed"),
+            Shell::Fish
+        ));
     }
 
     #[test]
