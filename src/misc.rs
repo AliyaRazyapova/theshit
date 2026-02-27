@@ -36,7 +36,11 @@ fn copy_dir_recursive(src: &Dir, dst: &Path) -> Result<()> {
         fs::create_dir_all(dst)?;
     }
     for entry in src.entries() {
-        let dst_path = dst.join(entry.path().strip_prefix(src.path()).unwrap());
+        let dst_path = dst.join(
+            entry.path()
+                .strip_prefix(src.path())
+                .expect("Entry path should be inside src directory")
+        );
         match entry {
             DirEntry::Dir(dir) => copy_dir_recursive(dir, &dst_path)?,
             DirEntry::File(file) => {
@@ -78,7 +82,7 @@ fn damerau_levenshtein_distance(s1: &str, s2: &str) -> usize {
     let columns = s2.len() + 1;
     let s1 = s1.chars().collect::<Vec<_>>().into_boxed_slice();
     let s2 = s2.chars().collect::<Vec<_>>().into_boxed_slice();
-    let mut matrix = vec![0usize; columns * rows].into_boxed_slice(); // matrix[i,j] = matrix[i*columns+j+1]
+    let mut matrix = vec![0usize; columns * rows].into_boxed_slice();
 
     for i in 0..rows {
         for j in 0..columns {
@@ -120,7 +124,8 @@ pub fn split_command(command: &str) -> Vec<String> {
 
 pub fn replace_argument(script: &str, from: &str, to: &str) -> String {
     let end_pattern = format!(r" {}$", regex::escape(from));
-    let end_regex = Regex::new(&end_pattern).unwrap();
+    let end_regex = Regex::new(&end_pattern)
+        .expect("Hardcoded regex pattern should be valid");
 
     if end_regex.is_match(script) {
         return end_regex.replace(script, format!(" {to}")).to_string();
@@ -171,22 +176,21 @@ mod tests {
 
     #[test]
     fn creates_fix_rules() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
         let temp_dir_path = temp_dir.path();
 
-        assert!(
-            create_default_fix_rules(temp_dir_path.to_path_buf().join("theshit/fix_rules")).is_ok()
-        );
+        let result = create_default_fix_rules(temp_dir_path.to_path_buf().join("theshit/fix_rules"));
+        assert!(result.is_ok());
         assert!(temp_dir_path.join("theshit/fix_rules/active").exists());
         assert!(temp_dir_path.join("theshit/fix_rules/additional").exists());
     }
 
     #[test]
     fn returns_error_when_fix_rules_already_exist() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
         let temp_dir_path = temp_dir.path();
         let rules_dir = temp_dir_path.join("theshit/fix_rules");
-        fs::create_dir_all(&rules_dir).unwrap();
+        fs::create_dir_all(&rules_dir).expect("Failed to create directory");
 
         let result = create_default_fix_rules(rules_dir);
         assert!(result.is_err());

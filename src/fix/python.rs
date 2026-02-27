@@ -59,7 +59,6 @@ pub fn process_python_rules(
         }
 
         for rule_path in rule_paths {
-            // check_security теперь возвращает AppError, и мы используем ?
             if let Err(e) = check_security(&rule_path) {
                 eprintln!("{}", e);
                 continue;
@@ -343,7 +342,8 @@ mod tests {
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, vec![path]);
         assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
+        let commands = result.expect("Processing should succeed");
+        assert!(commands.is_empty());
     }
 
     #[test]
@@ -362,7 +362,8 @@ def fix(command, stdout, stderr):
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, vec![rule_path]);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), vec!["fixed-command".to_string()]);
+        let commands = result.expect("Processing should succeed");
+        assert_eq!(commands, vec!["fixed-command".to_string()]);
     }
 
     #[test]
@@ -381,7 +382,8 @@ def fix(command, stdout, stderr):
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, vec![rule_path]);
         assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
+        let commands = result.expect("Processing should succeed");
+        assert!(commands.is_empty());
     }
 
     #[test]
@@ -398,7 +400,8 @@ def fix(command, stdout, stderr):
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, vec![rule_path]);
         assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
+        let commands = result.expect("Processing should succeed");
+        assert!(commands.is_empty());
     }
 
     #[test]
@@ -417,7 +420,8 @@ def fix(command, stdout, stderr):
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, vec![rule_path]);
         assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
+        let commands = result.expect("Processing should succeed");
+        assert!(commands.is_empty());
     }
 
     #[test]
@@ -436,7 +440,8 @@ def fix(command, stdout, stderr):
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, vec![rule_path]);
         assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
+        let commands = result.expect("Processing should succeed");
+        assert!(commands.is_empty());
     }
 
     #[test]
@@ -469,8 +474,9 @@ def fix(c, o, e): return "cmd3"
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, vec![rule1, rule2, rule3]);
         assert!(result.is_ok());
+        let commands = result.expect("Processing should succeed");
         assert_eq!(
-            result.unwrap(),
+            commands,
             vec!["cmd1".to_string(), "cmd3".to_string()]
         );
     }
@@ -481,7 +487,8 @@ def fix(c, o, e): return "cmd3"
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, paths);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("No common parent found"));
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("No common parent found"));
     }
 
     #[test]
@@ -489,6 +496,7 @@ def fix(c, o, e): return "cmd3"
         let cmd = dummy_command();
         let result = process_python_rules(&cmd, vec![]);
         assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
+        let commands = result.expect("Processing should succeed");
+        assert!(commands.is_empty());
     }
 }
