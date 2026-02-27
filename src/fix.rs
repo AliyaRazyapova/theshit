@@ -183,7 +183,8 @@ fn choose_fixed_command(mut fixed_commands: Vec<String>) -> String {
         std::process::exit(1);
     }
 
-    let mut current_command = fixed_commands.first().unwrap();
+    let mut current_command = fixed_commands.first()
+        .expect("fixed_commands is not empty; checked above");
     let mut current_index = 0;
 
     eprintln!();
@@ -219,7 +220,8 @@ fn choose_fixed_command(mut fixed_commands: Vec<String>) -> String {
                                 } else {
                                     current_index = fixed_commands.len() - 1;
                                 }
-                                current_command = fixed_commands.get(current_index).unwrap(); // safe
+                                current_command = fixed_commands.get(current_index)
+                                    .expect("current_index is within bounds");
                                 if let Err(e) = err.write_all(
                                     format!(
                                         "{} [{}/{}/{}/{}]",
@@ -242,7 +244,8 @@ fn choose_fixed_command(mut fixed_commands: Vec<String>) -> String {
                                 } else {
                                     current_index = 0;
                                 }
-                                current_command = fixed_commands.get(current_index).unwrap(); // safe
+                                current_command = fixed_commands.get(current_index)
+                                    .expect("current_index is within bounds");
                                 if let Err(e) = err.write_all(
                                     format!(
                                         "{} [{}/{}/{}/{}]",
